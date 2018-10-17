@@ -598,6 +598,114 @@ void randomSampleConsensus() {
     }
 }
 
+/******************LAB3******************/
+#define WINDOW_SIZE 3   //=> the window is (3+1+3) => 7x7
+
+struct peak {
+    int theta, ro, hval;
+    bool operator < (const peak& o) const {
+        return hval > o.hval;
+    }
+};
+
+void houghTransform()
+{
+    char fname[MAX_PATH];
+    while (openFileDlg(fname)) {
+        Mat img = imread(fname, CV_LOAD_IMAGE_GRAYSCALE);
+        Mat imgColor = imread(fname, CV_LOAD_IMAGE_COLOR);
+
+        int D = (int)sqrt((double)(img.rows*img.rows + img.cols*img.cols));
+
+        Mat Hough(360, D + 1, CV_32SC1, Scalar(0)); //matrix with int values
+
+        int i, j;
+
+        //hough accumulator
+        int ro, theta;
+        double rad;
+        for (i = 0; i < img.rows; i++) {
+            for (j = 0; j < img.cols; j++) {
+                if (img.at<uchar>(i, j) == 255) {
+                    for (int theta = 0; theta < 360; theta++) {
+                        rad = (double)theta * PI / 180.0;
+                        ro = j * cos(rad) + i * sin(rad);
+                        if (ro >= 0 && ro < D) {
+                            Hough.at<int>(theta, ro)++;
+                        }
+                    }
+                }
+            }
+        }
+
+        //finding the maximum for normalization
+        int maxHough = 0;
+        for (i = 0; i < Hough.rows; i++) {
+            for (j = 0; j < Hough.cols; j++) {
+                if (Hough.at<int>(i, j) > maxHough) {
+                    maxHough = Hough.at<int>(i, j);
+                }
+            }
+        }
+
+        Mat houghImg;
+        Hough.convertTo(houghImg, CV_8UC1, 255.f / maxHough);
+
+        //we have the image here
+        //imshow("Hough", houghImg);
+        //waitKey();
+
+        //filtering out the lines
+        int window_i, window_j;
+        bool local_maxima;
+        std::vector<peak> maximas;
+
+        //go over the accumulator
+        for (i = 0; i < Hough.rows; i++) {
+            for (j = WINDOW_SIZE; j < Hough.cols - WINDOW_SIZE; j++) {
+                local_maxima = true;
+                //go over the window
+                for (window_i = i - WINDOW_SIZE; window_i <= i + WINDOW_SIZE; window_i++) {
+                    //i is 
+                    if (window_i < 0) {
+                        window_i += Hough.rows;
+                    }
+                    if (window_i >= Hough.rows) {
+                        window_i -= Hough.rows;
+                    }
+                    for (window_j = j - WINDOW_SIZE; window_j <= j + WINDOW_SIZE; window_j++) {
+        //                if (window_j >= 0 && window_j < Hough.cols) {
+                            if (Hough.at<int>(i, j) < Hough.at<int>(window_i, window_j)) {
+                                local_maxima = false;
+                                break;
+
+                            }
+                      //  }
+                    }
+                    if (!local_maxima) {
+                        break;
+                    }
+                }
+                if (local_maxima) {
+                    maximas.push_back(peak{ i, j, Hough.at<int>(i, j) });
+                }
+            }
+        }
+
+        std::sort(maximas.begin(), maximas.end());
+        for (i = 0; i < 10; i++) {
+            rad = (double)maximas[i].theta * PI / 180.0;
+            line(imgColor, Point(0, maximas[i].ro / sin(rad)),
+                Point(img.cols, (maximas[i].ro - img.cols * cos(rad)) / sin(rad)),
+                Scalar(0, 0, 255));
+        }
+
+
+        imshow("Hough", houghImg);
+        imshow("Image", imgColor);
+        waitKey();
+    }
+}
 
 int main()
 {
@@ -618,6 +726,7 @@ int main()
         printf(" 9 - Mouse callback demo\n");
         printf(" 10 - Least Mean Squares\n");
         printf(" 11 - Random Sample Consensus\n");
+        printf(" 12 - Hough transform for line detection\n");
         printf(" 0 - Exit\n\n");
         printf("Option: ");
         scanf("%d", &op);
@@ -656,6 +765,9 @@ int main()
             break;
         case 11:
             randomSampleConsensus();
+            break;
+        case 12:
+            houghTransform();
             break;
         }
     } while (op != 0);
