@@ -674,13 +674,13 @@ void houghTransform()
                         window_i -= Hough.rows;
                     }
                     for (window_j = j - WINDOW_SIZE; window_j <= j + WINDOW_SIZE; window_j++) {
-        //                if (window_j >= 0 && window_j < Hough.cols) {
-                            if (Hough.at<int>(i, j) < Hough.at<int>(window_i, window_j)) {
-                                local_maxima = false;
-                                break;
+                        //                if (window_j >= 0 && window_j < Hough.cols) {
+                        if (Hough.at<int>(i, j) < Hough.at<int>(window_i, window_j)) {
+                            local_maxima = false;
+                            break;
 
-                            }
-                      //  }
+                        }
+                        //  }
                     }
                     if (!local_maxima) {
                         break;
@@ -707,6 +707,93 @@ void houghTransform()
     }
 }
 
+/******************LAB3******************/
+Mat distanceTransform(Mat img) {
+    Mat distanceTr;
+    img.copyTo(distanceTr);
+
+    int mask_k_upper[] = { -1, -1, -1, 0 };
+    int mask_l_upper[] = { -1, 0, 1, -1 };
+    int mask_upper_weights[] = { 3, 2, 3, 2 };
+
+    int mask_k_lower[] = { 0, 1, 1, 1 };
+    int mask_l_lower[] = { 1, -1, 0, 1 };
+    int mask_lower_weights[] = { 2, 3, 2, 3 };
+
+    int i, j, k;
+    int distance;
+
+    //LEFT->RIGHT, TOP->BOTTOM
+    for (i = 1; i < distanceTr.rows - 1; i++) {
+        for (j = 1; j < distanceTr.cols - 1; j++) {
+            for (k = 0; k < 4; k++) {
+                distance = distanceTr.at<uchar>(i + mask_k_upper[k], j + mask_l_upper[k]) + mask_upper_weights[k];
+                if (distance < distanceTr.at<uchar>(i, j)) {
+                    distanceTr.at<uchar>(i, j) = distance;
+                }
+            }
+        }
+    }
+
+    //RIGHT->LEFT, BOTTOM->TOP
+    for (i = distanceTr.rows - 2; i > 0; i--) {
+        for (j = distanceTr.cols - 2; j > 0; j--) {
+            for (k = 0; k < 4; k++) {
+                distance = distanceTr.at<uchar>(i + mask_k_lower[k], j + mask_l_lower[k]);
+                distance += mask_lower_weights[k];
+                if (distance < distanceTr.at<uchar>(i, j)) {
+                    distanceTr.at<uchar>(i, j) = distance;
+                }
+            }
+        }
+    }
+
+    return distanceTr;
+}
+
+void showDistanceTransform() {
+    char fname[MAX_PATH];
+    while (openFileDlg(fname)) {
+        Mat img = imread(fname, CV_LOAD_IMAGE_GRAYSCALE);
+        Mat distanceTr = distanceTransform(img);
+
+        imshow("Image", img);
+        imshow("DT", distanceTr);
+        waitKey();
+    }
+}
+
+void patternMatching() {
+    char fnameTempl[] = "Files/images_DT_PM/PatternMatching/template.bmp";
+    Mat templ = imread(fnameTempl, CV_LOAD_IMAGE_GRAYSCALE);
+
+    char fname[MAX_PATH];
+    while (openFileDlg(fname)) {
+        Mat img = imread(fname, CV_LOAD_IMAGE_GRAYSCALE);
+
+        Mat distanceTr = distanceTransform(img);
+
+        imshow("DT", distanceTr);
+        waitKey();
+
+        int sum = 0;
+        int n = 0;
+
+        int i, j;
+        for (i = 0; i < templ.rows; i++) {
+            for (j = 0; j < templ.cols; j++) {
+                if (templ.at<uchar>(i, j) == 0) {
+                    sum += distanceTr.at<uchar>(i, j);
+                    n++;
+                }
+            }
+        }
+
+        float avg = (float)sum / n;
+        printf("Score: %f\n", avg);
+    }
+}
+
 int main()
 {
     int op;
@@ -727,6 +814,8 @@ int main()
         printf(" 10 - Least Mean Squares\n");
         printf(" 11 - Random Sample Consensus\n");
         printf(" 12 - Hough transform for line detection\n");
+        printf(" 13 - Distance transform\n");
+        printf(" 14 - Pattern matching\n");
         printf(" 0 - Exit\n\n");
         printf("Option: ");
         scanf("%d", &op);
@@ -768,6 +857,12 @@ int main()
             break;
         case 12:
             houghTransform();
+            break;
+        case 13:
+            showDistanceTransform();
+            break;
+        case 14:
+            patternMatching();
             break;
         }
     } while (op != 0);
