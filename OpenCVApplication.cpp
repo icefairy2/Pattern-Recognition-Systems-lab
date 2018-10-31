@@ -707,7 +707,7 @@ void houghTransform()
     }
 }
 
-/******************LAB3******************/
+/******************LAB4******************/
 Mat distanceTransform(Mat img) {
     Mat distanceTr;
     img.copyTo(distanceTr);
@@ -794,6 +794,117 @@ void patternMatching() {
     }
 }
 
+/******************LAB5******************/
+#define P_FACES 400
+#define IMG_ROWS 19
+#define IMG_COLS 19
+#define N_FEATURES IMG_ROWS*IMG_COLS
+
+void dataAnalysis() {
+	Mat features = Mat::zeros(P_FACES, N_FEATURES, CV_8UC1);
+	//Read 400 images
+	char folder[256] = "Files/images_faces";
+	char fname[256];
+
+	int i, j;
+	int p;
+	Mat img;
+	for (int p = 1; p <= P_FACES; p++) {
+		sprintf(fname, "%s/face%05d.bmp", folder, p);
+		img = imread(fname, 0);
+		//compute feature matrix
+		for (i = 0; i < IMG_ROWS; i++) {
+			for (j = 0; j < IMG_COLS; j++) {
+				features.at<uchar>(p-1, IMG_COLS*i + j) = img.at<uchar>(i, j);
+			}
+		}
+	}
+
+	//compute means
+	double means[N_FEATURES];
+	for (i = 0; i < N_FEATURES; i++) {
+		means[i] = 0;
+	}
+	for (i = 0; i < N_FEATURES; i++) {
+		for (p = 0; p < P_FACES; p++) {
+			means[i] += features.at<uchar>(p, i);
+		}
+		means[i] /= P_FACES;
+	}
+
+	std::ofstream meansFile("Files/images_faces/means.csv");
+
+	for (i = 0; i < N_FEATURES; i++) {
+		meansFile << means[i] << ',';
+	}
+
+	//compute standard deviations
+	double stddev[N_FEATURES];
+	for (i = 0; i < N_FEATURES; i++) {
+		stddev[i] = 0;
+	}
+	for (i = 0; i < N_FEATURES; i++) {
+		for (p = 0; p < P_FACES; p++) {
+			stddev[i] += pow(features.at<uchar>(p, i) - means[i], 2);
+		}
+		stddev[i] /= P_FACES;
+		stddev[i] = sqrt(stddev[i]);
+	}
+
+	//compute covariance matrix
+	Mat covariance = Mat::zeros(N_FEATURES, N_FEATURES, CV_32FC1);
+	for (i = 0; i < N_FEATURES; i++) {
+		for (j = i; j < N_FEATURES; j++) {
+			for (p = 0; p < P_FACES; p++) {
+				covariance.at<float>(i, j) += (features.at<uchar>(p, i) - means[i]) * (features.at<uchar>(p, j) - means[j]);
+			}
+			covariance.at<float>(i, j) /= (float)P_FACES;
+			covariance.at<float>(j, i) = covariance.at<float>(i, j);
+		}
+	}
+
+	std::ofstream covFile("Files/images_faces/covariance.csv");
+
+	for (i = 0; i < N_FEATURES; i++) {
+		for (j = 0; j < N_FEATURES; j++) {
+			covFile << covariance.at<float>(i, j) << ',';
+		}
+		covFile << '\n';
+	}
+
+	//compute correlation coeffiecients
+	Mat correlation = Mat::zeros(N_FEATURES, N_FEATURES, CV_32FC1);
+	for (i = 0; i < N_FEATURES; i++) {
+		for (j = i; j < N_FEATURES; j++) {
+			correlation.at<float>(i, j) = covariance.at<float>(i, j) / (stddev[i] * stddev[j]);
+			correlation.at<float>(j, i) = correlation.at<float>(i, j);
+		}
+	}
+
+	std::ofstream corrFile("Files/images_faces/correlation.csv");
+
+	for (i = 0; i < N_FEATURES; i++) {
+		for (j = 0; j < N_FEATURES; j++) {
+			corrFile << correlation.at<float>(i, j) << ',';
+		}
+		corrFile << '\n';
+	}
+
+	//display correlation chart
+	//left eye: row 5 col 4
+	int left_eye = 5 * 19 + 4;
+	//right eye: row 5 col 14
+	int right_eye = 5 * 19 + 14;
+	Mat chart = Mat(256, 256, CV_8UC1, Scalar(255));
+	for (p = 0; p < P_FACES; p++) {
+		chart.at<uchar>(features.at<uchar>(p, left_eye), features.at<uchar>(p, right_eye)) = 0;
+	}
+	printf("Covariance: %f\n", covariance.at<float>(left_eye, right_eye));
+	printf("Correlation: %f\n", correlation.at<float>(left_eye, right_eye));
+	imshow("Chart", chart);
+	waitKey();
+}
+
 int main()
 {
     int op;
@@ -816,6 +927,7 @@ int main()
         printf(" 12 - Hough transform for line detection\n");
         printf(" 13 - Distance transform\n");
         printf(" 14 - Pattern matching\n");
+        printf(" 15 - Statistical data analysis\n");
         printf(" 0 - Exit\n\n");
         printf("Option: ");
         scanf("%d", &op);
@@ -863,6 +975,9 @@ int main()
             break;
         case 14:
             patternMatching();
+            break;
+		case 15:
+            dataAnalysis();
             break;
         }
     } while (op != 0);
