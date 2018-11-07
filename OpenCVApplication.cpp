@@ -907,35 +907,40 @@ void dataAnalysis() {
 }
 
 /******************LAB6******************/
+//Struct for storing patterns for k-means clustering
 struct Pattern {
 	std::vector<int> features;
-	double dist;
 	int cluster;
 };
 
-std::vector<Pattern> kmeans(int K, int n, int d, std::vector<Pattern> &patterns) {
+//Calculates the means of k clusters
+//Returns: a vector of means, dimension K
+//Param K: number of clusters
+//Param n: number of patterns
+//Param d: number of features
+//Param patterns: set of patterns of type Pattern struct, their corresponding cluster 
+//					will be calculated and stored in the struct
+std::vector<Pattern> kmeans(int K, std::vector<Pattern> &patterns) {
 	std::vector<Pattern> means;
+
+	int i, j, dn;
+	int n = patterns.size();
+	int d = patterns.at(0).features.size();
 
 	std::default_random_engine generator;
 	generator.seed(time(NULL));
-	std::uniform_int_distribution<int> distribution(0, n-1);
+	std::uniform_int_distribution<int> distribution(0, n - 1);
 
-	int i, j, dn;
-
-	//initialize
-	int randint = distribution(generator);
-	int randintprev = randint;
+	//1. INITIALIZE
+	int randint;
 	for (i = 0; i < K; i++) {
-		while (randint == randintprev) {
-			randint = distribution(generator);
-		}
+		randint = distribution(generator);
 		std::vector<int> features;
 		for (dn = 0; dn < d; dn++) {
 			features.push_back(patterns.at(randint).features[dn]);
 		}
-		Pattern new_mean = { features, 0.0, i };
+		Pattern new_mean = { features, i };
 		means.push_back(new_mean);
-		randintprev = randint;
 	}
 	
 	boolean nochanges = false;
@@ -945,13 +950,16 @@ std::vector<Pattern> kmeans(int K, int n, int d, std::vector<Pattern> &patterns)
 		nr_patterns.push_back(0);
 	}
 
+	double minDistance;
+	int minClusterID;
+
 	while (!nochanges) {
 		nochanges = true;
 
-		//assignment
+		//2. ASSIGNMENT
 		for (i = 0; i < n; i++) {
-			double minDistance = DBL_MAX;
-			int minClusterID;
+			minDistance = DBL_MAX;
+			minClusterID = patterns.at(i).cluster;
 
 			for (j = 0; j < K; j++) {
 				distance = 0;
@@ -966,7 +974,6 @@ std::vector<Pattern> kmeans(int K, int n, int d, std::vector<Pattern> &patterns)
 				}
 			}
 
-			patterns.at(i).dist = minDistance;
 			if (minClusterID != patterns.at(i).cluster)
 			{
 				patterns.at(i).cluster = minClusterID;
@@ -974,7 +981,7 @@ std::vector<Pattern> kmeans(int K, int n, int d, std::vector<Pattern> &patterns)
 			}
 		}
 
-		//update means
+		//3. UPDATE MEANS
 		for (i = 0; i < K; i++) {
 			nr_patterns.at(i) = 0;
 			for (dn = 0; dn < d; dn++) {
@@ -991,66 +998,216 @@ std::vector<Pattern> kmeans(int K, int n, int d, std::vector<Pattern> &patterns)
 
 		for (i = 0; i < K; i++) {
 			for (dn = 0; dn < d; dn++) {
-				means.at(i).features[dn] /= nr_patterns.at(i);
+				if (nr_patterns.at(i) > 0) {
+					means.at(i).features[dn] /= nr_patterns.at(i);
+				}
 			}
-			printf("%d\n", nr_patterns[i]);
 		}
-		printf("\n");
 	}
 
 	return means;
 }
 
+void voronoi_diag(std::vector<Pattern> &means, std::vector<Pattern> &patterns) {
+	double minDistance;
+	int minClusterID;
+	double distance;
+
+	int K = means.size();
+	int n = patterns.size();
+	int d = patterns.at(0).features.size();
+
+	int i, j, dn;
+	for (i = 0; i < n; i++) {
+		minDistance = DBL_MAX;
+		minClusterID = patterns.at(i).cluster;
+
+		for (j = 0; j < K; j++) {
+			distance = 0;
+			for (dn = 0; dn < d; dn++) {
+				distance += pow(patterns.at(i).features[dn] - means.at(j).features[dn], 2);
+			}
+			distance = sqrt(distance);
+
+			if (minDistance > distance) {
+				minDistance = distance;
+				minClusterID = j;
+			}
+		}
+
+		if (minClusterID != patterns.at(i).cluster)
+		{
+			patterns.at(i).cluster = minClusterID;
+		}
+	}
+}
+
 void kmeansPoints() {
+	printf("Please choose one of the points*.bmp pictures\n");
 	//nr of clusters
-	const int K = 5;
-	//nr of features
-	const int d = 2;
+	const int K = 3;
+	printf("Number of clusters is: %d\n", K);
 
 	char fname[MAX_PATH];
 	while (openFileDlg(fname)) {
 		Mat img = imread(fname, CV_LOAD_IMAGE_GRAYSCALE);
 
 		std::vector<Pattern> patterns;
+		std::vector<Pattern> patterns_all;
 		std::vector<Point2d> points;
-		//nr of pattern points
-		int n = 0;
 		
 		int i, j;
 		for (i = 0; i < img.rows; i++) {
 			for (j = 0; j < img.cols; j++) {
+			
+				//there are two features for the points: x position and y position
+				std::vector<int> features;
+				features.push_back(j);
+				features.push_back(i);
+
+				Pattern pattern = { features, 0 };
+
 				if (img.at<uchar>(i, j) == 0) {
 					Point2d point(j, i);
 					points.push_back(point);
-					n++;
-					std::vector<int> features;
-					features.push_back(j);
-					features.push_back(i);
-					Pattern pattern = { features, -1.0, 0 };
+
 					patterns.push_back(pattern);
 				}
+
+				patterns_all.push_back(pattern);
 			}
 		}
 
-		std::vector<Pattern> means = kmeans(K, n, d, patterns);
+		std::vector<Pattern> means = kmeans(K, patterns);
 
 		Mat img_color(img.rows, img.cols, CV_8UC3, Scalar(255, 255, 255));
 
+		//calculate K random colors
 		Vec3b colors[K];
 		std::default_random_engine gen;
 		gen.seed(time(NULL));
 		std::uniform_int_distribution<int> distribution(0, 255);
+
 		for (int i = 0; i < K; i++) {
-			colors[i] = { (uchar)(rand()%256), (uchar)(rand() % 256), (uchar)(rand() % 256) };
-			printf("%d %d\n", means[i].features[0], means[i].features[1]);
+			colors[i] = { (uchar)distribution(gen), (uchar)distribution(gen), (uchar)distribution(gen) };
 		}
 
+		int n = patterns.size();
+
+		//color the points in the clusters the same for the same cluster
 		for (i = 0; i < n; i++) {
 			img_color.at<Vec3b>(points[i].y, points[i].x) = colors[patterns.at(i).cluster];
 		}
 
+		//create the voronoi diagram
+		Mat voronoi(img.rows, img.cols, CV_8UC3, Scalar(255, 255, 255));
+
+		voronoi_diag(means, patterns_all);
+
+		for (i = 0; i < img.rows; i++) {
+			for (j = 0; j < img.cols; j++) {
+				n = i * img.cols + j;
+				voronoi.at<Vec3b>(i, j) = colors[patterns_all.at(n).cluster];
+			}
+		}
+
 		imshow("Orig", img);
 		imshow("Color", img_color);
+		imshow("Voronoi", voronoi);
+		waitKey();
+	}
+}
+
+void kmeansGrayScale() {
+	//nr of clusters
+	const int K = 6;
+	printf("Number of clusters is: %d\n", K);
+
+	char fname[MAX_PATH];
+	while (openFileDlg(fname)) {
+		Mat img = imread(fname, CV_LOAD_IMAGE_GRAYSCALE);
+
+		std::vector<Pattern> patterns;
+
+		int i, j;
+		for (i = 0; i < img.rows; i++) {
+			for (j = 0; j < img.cols; j++) {
+
+				//there is one feature for a grayscale image: the intensity
+				std::vector<int> features;
+				features.push_back(img.at<uchar>(i, j));
+
+				Pattern pattern = { features, 0 };
+
+				patterns.push_back(pattern);
+			}
+		}
+
+		std::vector<Pattern> means = kmeans(K, patterns);
+
+		Mat img_res(img.rows, img.cols, CV_8UC1);
+
+		voronoi_diag(means, patterns);
+
+		int n;
+		for (i = 0; i < img.rows; i++) {
+			for (j = 0; j < img.cols; j++) {
+				n = i * img.cols + j;
+				img_res.at<uchar>(i, j) = means.at(patterns.at(n).cluster).features[0];
+			}
+		}
+
+		imshow("Orig", img);
+		imshow("Res", img_res);
+		waitKey();
+	}
+}
+
+void kmeansColor() {
+	//nr of clusters
+	const int K = 6;
+	printf("Number of clusters is: %d\n", K);
+
+	char fname[MAX_PATH];
+	while (openFileDlg(fname)) {
+		Mat img = imread(fname, CV_LOAD_IMAGE_COLOR);
+
+		std::vector<Pattern> patterns;
+
+		int i, j;
+		for (i = 0; i < img.rows; i++) {
+			for (j = 0; j < img.cols; j++) {
+
+				//there is one feature for a grayscale image: the intensity
+				std::vector<int> features;
+				features.push_back(img.at<Vec3b>(i, j)[0]);
+				features.push_back(img.at<Vec3b>(i, j)[1]);
+				features.push_back(img.at<Vec3b>(i, j)[2]);
+
+				Pattern pattern = { features, 0 };
+
+				patterns.push_back(pattern);
+			}
+		}
+
+		std::vector<Pattern> means = kmeans(K, patterns);
+
+		Mat img_res(img.rows, img.cols, CV_8UC3);
+
+		voronoi_diag(means, patterns);
+
+		int n;
+		for (i = 0; i < img.rows; i++) {
+			for (j = 0; j < img.cols; j++) {
+				n = i * img.cols + j;
+				img_res.at<Vec3b>(i, j)[0] = means.at(patterns.at(n).cluster).features[0];
+				img_res.at<Vec3b>(i, j)[1] = means.at(patterns.at(n).cluster).features[1];
+				img_res.at<Vec3b>(i, j)[2] = means.at(patterns.at(n).cluster).features[2];
+			}
+		}
+
+		imshow("Orig", img);
+		imshow("Res", img_res);
 		waitKey();
 	}
 }
@@ -1078,7 +1235,9 @@ int main()
         printf(" 13 - Distance transform\n");
         printf(" 14 - Pattern matching\n");
         printf(" 15 - Statistical data analysis\n");
-        printf(" 16 - K means clustering\n");
+        printf(" 16 - K means clustering points\n");
+        printf(" 17 - K means clustering grayscale\n");
+        printf(" 18 - K means clustering color\n");
         printf(" 0 - Exit\n\n");
         printf("Option: ");
         scanf("%d", &op);
@@ -1132,6 +1291,12 @@ int main()
             break;
 		case 16:
 			kmeansPoints();
+            break;
+		case 17:
+			kmeansGrayScale();
+            break;
+		case 18:
+			kmeansColor();
             break;
         }
     } while (op != 0);
