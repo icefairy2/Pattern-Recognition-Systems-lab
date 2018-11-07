@@ -3,6 +3,7 @@
 
 #include "stdafx.h"
 #include "common.h"
+#include <random>
 
 
 void testOpenImage()
@@ -905,6 +906,155 @@ void dataAnalysis() {
 	waitKey();
 }
 
+/******************LAB6******************/
+struct Pattern {
+	std::vector<int> features;
+	double dist;
+	int cluster;
+};
+
+std::vector<Pattern> kmeans(int K, int n, int d, std::vector<Pattern> &patterns) {
+	std::vector<Pattern> means;
+
+	std::default_random_engine generator;
+	generator.seed(time(NULL));
+	std::uniform_int_distribution<int> distribution(0, n-1);
+
+	int i, j, dn;
+
+	//initialize
+	int randint = distribution(generator);
+	int randintprev = randint;
+	for (i = 0; i < K; i++) {
+		while (randint == randintprev) {
+			randint = distribution(generator);
+		}
+		std::vector<int> features;
+		for (dn = 0; dn < d; dn++) {
+			features.push_back(patterns.at(randint).features[dn]);
+		}
+		Pattern new_mean = { features, 0.0, i };
+		means.push_back(new_mean);
+		randintprev = randint;
+	}
+	
+	boolean nochanges = false;
+	double distance;
+	std::vector<int> nr_patterns;
+	for (i = 0; i < K; i++) {
+		nr_patterns.push_back(0);
+	}
+
+	while (!nochanges) {
+		nochanges = true;
+
+		//assignment
+		for (i = 0; i < n; i++) {
+			double minDistance = DBL_MAX;
+			int minClusterID;
+
+			for (j = 0; j < K; j++) {
+				distance = 0;
+				for (dn = 0; dn < d; dn++) {
+					distance += pow(patterns.at(i).features[dn] - means.at(j).features[dn], 2);
+				}
+				distance = sqrt(distance);
+
+				if (minDistance > distance) {
+					minDistance = distance;
+					minClusterID = j;
+				}
+			}
+
+			patterns.at(i).dist = minDistance;
+			if (minClusterID != patterns.at(i).cluster)
+			{
+				patterns.at(i).cluster = minClusterID;
+				nochanges = false;
+			}
+		}
+
+		//update means
+		for (i = 0; i < K; i++) {
+			nr_patterns.at(i) = 0;
+			for (dn = 0; dn < d; dn++) {
+				means.at(i).features[dn] = 0;
+			}
+		}
+
+		for (i = 0; i < n; i++) {
+			for (dn = 0; dn < d; dn++) {
+				means.at(patterns.at(i).cluster).features[dn] += patterns.at(i).features[dn];
+			}
+			nr_patterns[patterns.at(i).cluster]++;
+		}
+
+		for (i = 0; i < K; i++) {
+			for (dn = 0; dn < d; dn++) {
+				means.at(i).features[dn] /= nr_patterns.at(i);
+			}
+			printf("%d\n", nr_patterns[i]);
+		}
+		printf("\n");
+	}
+
+	return means;
+}
+
+void kmeansPoints() {
+	//nr of clusters
+	const int K = 5;
+	//nr of features
+	const int d = 2;
+
+	char fname[MAX_PATH];
+	while (openFileDlg(fname)) {
+		Mat img = imread(fname, CV_LOAD_IMAGE_GRAYSCALE);
+
+		std::vector<Pattern> patterns;
+		std::vector<Point2d> points;
+		//nr of pattern points
+		int n = 0;
+		
+		int i, j;
+		for (i = 0; i < img.rows; i++) {
+			for (j = 0; j < img.cols; j++) {
+				if (img.at<uchar>(i, j) == 0) {
+					Point2d point(j, i);
+					points.push_back(point);
+					n++;
+					std::vector<int> features;
+					features.push_back(j);
+					features.push_back(i);
+					Pattern pattern = { features, -1.0, 0 };
+					patterns.push_back(pattern);
+				}
+			}
+		}
+
+		std::vector<Pattern> means = kmeans(K, n, d, patterns);
+
+		Mat img_color(img.rows, img.cols, CV_8UC3, Scalar(255, 255, 255));
+
+		Vec3b colors[K];
+		std::default_random_engine gen;
+		gen.seed(time(NULL));
+		std::uniform_int_distribution<int> distribution(0, 255);
+		for (int i = 0; i < K; i++) {
+			colors[i] = { (uchar)(rand()%256), (uchar)(rand() % 256), (uchar)(rand() % 256) };
+			printf("%d %d\n", means[i].features[0], means[i].features[1]);
+		}
+
+		for (i = 0; i < n; i++) {
+			img_color.at<Vec3b>(points[i].y, points[i].x) = colors[patterns.at(i).cluster];
+		}
+
+		imshow("Orig", img);
+		imshow("Color", img_color);
+		waitKey();
+	}
+}
+
 int main()
 {
     int op;
@@ -928,6 +1078,7 @@ int main()
         printf(" 13 - Distance transform\n");
         printf(" 14 - Pattern matching\n");
         printf(" 15 - Statistical data analysis\n");
+        printf(" 16 - K means clustering\n");
         printf(" 0 - Exit\n\n");
         printf("Option: ");
         scanf("%d", &op);
@@ -978,6 +1129,9 @@ int main()
             break;
 		case 15:
             dataAnalysis();
+            break;
+		case 16:
+			kmeansPoints();
             break;
         }
     } while (op != 0);
