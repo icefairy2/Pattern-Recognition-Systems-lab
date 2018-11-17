@@ -1165,7 +1165,7 @@ void kmeansGrayScale() {
 
 void kmeansColor() {
 	//nr of clusters
-	const int K = 6;
+	const int K = 3;
 	printf("Number of clusters is: %d\n", K);
 
 	char fname[MAX_PATH];
@@ -1212,6 +1212,253 @@ void kmeansColor() {
 	}
 }
 
+/******************LAB7******************/
+void principalCompAn2() {
+	//1.
+	FILE *f;
+	f = fopen("Files/data_PCA/pca2d.txt", "r");
+	if (f == NULL)
+	{
+		printf("Can't open file for reading.\n");
+	}
+
+	int n;
+	int d;
+	fscanf(f, "%d%d", &n, &d);
+		
+	Mat F(n, d, CV_64FC1);
+
+	int i, j;
+	double number;
+	for (i = 0; i < n; i++) {
+		for (j = 0; j < d; j++) {
+			fscanf(f, "%lf", &F.at<double>(i, j));
+		}
+		fscanf(f, "\n");
+	}
+	fclose(f);
+
+	//2.
+	Mat X(n, d, CV_64FC1);
+	double* means = new double[d];
+
+	for (i = 0; i < d; i++) {
+		means[i] = 0;
+		for (j = 0; j < n; j++) {
+			means[i] += F.at<double>(j, i);
+		}
+		means[i] /= (double)n;
+	}
+
+	for (i = 0; i < n; i++) {
+		for (j = 0; j < d; j++) {
+			X.at<double>(i, j) = F.at<double>(i, j) - means[j];
+		}
+	}
+
+	//3.
+	Mat C = X.t()*X / (n - 1);
+
+	//4.
+	Mat Lambda, Q;
+	eigen(C, Lambda, Q);
+	Q = Q.t();
+
+	//5.
+	for (i = 0; i < d; i++) {
+		printf("Eigenvalue %d: %lf\n", i, Lambda.at<double>(i));
+	}
+
+	//6.
+	int k = 2;
+	Mat Qk(d, k, CV_64FC1);
+
+	for (i = 0; i < d; i++) {
+		for (j = 0; j < k; j++) {
+			Qk.at<double>(i, j) = Q.at<double>(i, j);
+		}
+	}
+
+	//coefficients
+	Mat Xpca = X * Qk;
+	//approximate
+	Mat Xktld = Xpca * Qk.t();
+
+	//7.
+	double MAD = 0;
+	for (i = 0; i < n; i++) {
+		for (j = 0; j < d; j++) {
+			MAD += abs(X.at<double>(i, j) - Xktld.at<double>(i, j));
+		}
+	}
+	MAD /= n * d;
+	printf("MAD: %lf\n", MAD);
+
+	//8.
+	double* min = new double[k];
+	double* max = new double[k];
+	for (i = 0; i < k; i++) {
+		min[i] = DBL_MAX;
+		max[i] = DBL_MIN;
+		for (j = 0; j < n; j++) {
+			if (min[i] > Xpca.at<double>(j, i)) {
+				min[i] = Xpca.at<double>(j, i);
+			}
+			if (max[i] < Xpca.at<double>(j, i)) {
+				max[i] = Xpca.at<double>(j, i);
+			}
+		}
+	}
+	for (i = 0; i < k; i++) {
+		printf("Min for column %d: %lf\n", i, min[i]);
+		printf("Max for column %d: %lf\n", i, max[i]);
+	}
+
+	//9.
+	int height = (int)(max[0] - min[0] + 1);
+	int width = (int)(max[1] - min[1] + 1);
+
+	Mat normie(n, k, CV_32SC1);
+	for (i = 0; i < Xpca.rows; i++) {
+		for (j = 0; j < Xpca.cols; j++) {
+			normie.at<int>(i, j) = (int)(Xpca.at<double>(i, j) - min[j]);
+		}
+	}
+
+	Mat donut(height, width, CV_8UC1, Scalar(255));
+	for (i = 0; i < n; i++) {
+		donut.at<uchar>(normie.at<int>(i, 0), normie.at<int>(i, 1)) = 0;
+	}
+
+	imshow("Donut", donut);
+	waitKey();
+}
+
+void principalCompAn3() {
+	//1.
+	FILE *f;
+	f = fopen("Files/data_PCA/pca3d.txt", "r");
+	if (f == NULL)
+	{
+		printf("Can't open file for reading.\n");
+	}
+
+	int n;
+	int d;
+	fscanf(f, "%d%d", &n, &d);
+
+	Mat F(n, d, CV_64FC1);
+
+	int i, j;
+	double number;
+	for (i = 0; i < n; i++) {
+		for (j = 0; j < d; j++) {
+			fscanf(f, "%lf", &F.at<double>(i, j));
+		}
+		fscanf(f, "\n");
+	}
+	fclose(f);
+
+	//2.
+	Mat X(n, d, CV_64FC1);
+	double* means = new double[d];
+
+	for (i = 0; i < d; i++) {
+		means[i] = 0;
+		for (j = 0; j < n; j++) {
+			means[i] += F.at<double>(j, i);
+		}
+		means[i] /= (double)n;
+	}
+
+	for (i = 0; i < n; i++) {
+		for (j = 0; j < d; j++) {
+			X.at<double>(i, j) = F.at<double>(i, j) - means[j];
+		}
+	}
+
+	//3.
+	Mat C = X.t()*X / (n - 1);
+
+	//4.
+	Mat Lambda, Q;
+	eigen(C, Lambda, Q);
+	Q = Q.t();
+
+	//5.
+	for (i = 0; i < d; i++) {
+		printf("Eigenvalue %d: %lf\n", i, Lambda.at<double>(i));
+	}
+
+	//6.
+	int k = 3;
+	Mat Qk(d, k, CV_64FC1);
+
+	for (i = 0; i < d; i++) {
+		for (j = 0; j < k; j++) {
+			Qk.at<double>(i, j) = Q.at<double>(i, j);
+		}
+	}
+
+	//coefficients
+	Mat Xpca = X * Qk;
+	//approximate
+	Mat Xktld = Xpca * Qk.t();
+
+	//7.
+	double MAD = 0;
+	for (i = 0; i < n; i++) {
+		for (j = 0; j < d; j++) {
+			MAD += abs(X.at<double>(i, j) - Xktld.at<double>(i, j));
+		}
+	}
+	MAD /= n * d;
+	printf("MAD: %lf\n", MAD);
+
+	//8.
+	double* min = new double[k];
+	double* max = new double[k];
+	for (i = 0; i < k; i++) {
+		min[i] = DBL_MAX;
+		max[i] = DBL_MIN;
+		for (j = 0; j < n; j++) {
+			if (min[i] > Xpca.at<double>(j, i)) {
+				min[i] = Xpca.at<double>(j, i);
+			}
+			if (max[i] < Xpca.at<double>(j, i)) {
+				max[i] = Xpca.at<double>(j, i);
+			}
+		}
+	}
+	for (i = 0; i < k; i++) {
+		printf("Min for column %d: %lf\n", i, min[i]);
+		printf("Max for column %d: %lf\n", i, max[i]);
+	}
+
+	//9.
+	int height = (int)(max[0] - min[0] + 1);
+	int width = (int)(max[1] - min[1] + 1);
+
+	Mat normie(n, k, CV_32SC1);
+	for (i = 0; i < Xpca.rows; i++) {
+		for (j = 0; j < Xpca.cols -1; j++) {
+			normie.at<int>(i, j) = (int)(Xpca.at<double>(i, j) - min[j]);
+		}
+	}
+
+	for (i = 0; i < n; i++) {
+		normie.at<int>(i, 2) = (int)((Xpca.at<double>(i, 2) -min[2])/ (max[2]-min[2]) * 255);
+	}
+
+	Mat donut(height, width, CV_8UC1, Scalar(255));
+	for (i = 0; i < n; i++) {
+		donut.at<uchar>(normie.at<int>(i, 1), normie.at<int>(i, 0)) = (uchar)normie.at<int>(i, 2);
+	}
+
+	imshow("Lena", donut);
+	waitKey();
+}
+
 int main()
 {
     int op;
@@ -1238,6 +1485,8 @@ int main()
         printf(" 16 - K means clustering points\n");
         printf(" 17 - K means clustering grayscale\n");
         printf(" 18 - K means clustering color\n");
+        printf(" 19 - Principal Component Analysis 2d\n");
+        printf(" 20 - Principal Component Analysis 3d\n");
         printf(" 0 - Exit\n\n");
         printf("Option: ");
         scanf("%d", &op);
@@ -1298,6 +1547,12 @@ int main()
 		case 18:
 			kmeansColor();
             break;
+		case 19:
+			principalCompAn2();
+            break;
+		case 20:
+			principalCompAn3();
+			break;
         }
     } while (op != 0);
     return 0;
