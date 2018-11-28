@@ -1622,7 +1622,7 @@ void knnClassifier() {
 
 	for (i = 0; i < NR_OF_CLASSES; i++) {
 		for (int j = 0; j < NR_OF_CLASSES; j++) {
-			printf("%d ", confusion_mat.at<uchar>(i, j));
+			printf("%4d ", confusion_mat.at<uchar>(i, j));
 		}
 		printf("\n");
 	}
@@ -1643,6 +1643,169 @@ void knnClassifier() {
 	//has to be 0.5647
 	getchar();
 	getchar();
+}
+
+/******************LAB9******************/
+
+#define NR_OF_CLASSES_BAYES 10
+#define IMG_DIM 28
+#define THRESHOLD 128
+
+const int nrDimBayes = IMG_DIM * IMG_DIM;
+
+int classifyBayes(Mat img, double* priors, Mat likelihood) {
+    double class_logs[NR_OF_CLASSES_BAYES];
+
+    int c, i, j;
+
+    for (c = 0; c < NR_OF_CLASSES_BAYES; c++) {
+        class_logs[c] = log(priors[c]);
+        for (i = 0; i < IMG_DIM; i++) {
+            for (j = 0; j < IMG_DIM; j++) {
+                if (img.at<uchar>(i, j) == 0) {
+                    class_logs[c] += log(1 - likelihood.at<double>(c, i*IMG_DIM + j));
+                }
+                else {
+                    class_logs[c] += log(likelihood.at<double>(c, i*IMG_DIM + j));
+                }
+            }
+        }
+    }
+
+    double max = class_logs[0];
+    double maxc = 0;
+
+    for (c = 1; c < NR_OF_CLASSES_BAYES; c++) {
+        if (class_logs[c] > max) {
+            max = class_logs[c];
+            maxc = c;
+        }
+    }
+
+    return maxc;
+}
+
+void naiveBayes() {
+    int c, i, j, d;
+    char fname[1000];
+
+    double priors[NR_OF_CLASSES_BAYES];
+    Mat likelihood(NR_OF_CLASSES_BAYES, nrDimBayes, CV_64FC1, Scalar(0.0));
+
+    int classindex = 0;
+    int totalindex = 0;
+
+    //Training algorithm
+    for (c = 0; c < NR_OF_CLASSES_BAYES; c++) {
+        classindex = 0;
+        while (1) {
+            sprintf(fname, "Files/images_Bayes/train/%d/%06d.png", c, classindex);
+            Mat img = imread(fname, CV_LOAD_IMAGE_GRAYSCALE);
+            if (img.cols == 0) break;
+
+            //Binarization (thresholding)
+            for (i = 0; i < IMG_DIM; i++) {
+                for (j = 0; j < IMG_DIM; j++) {
+                    if (img.at<uchar>(i, j) < THRESHOLD) {
+                        img.at<uchar>(i, j) = 0;
+                    }
+                    else {
+                        img.at<uchar>(i, j) = 255;
+                    }
+                }
+            }
+
+            //Compute likelihood sum
+            for (i = 0; i < IMG_DIM; i++) {
+                for (j = 0; j < IMG_DIM; j++) {
+                    if (img.at<uchar>(i, j) == 255) {
+                        likelihood.at<double>(c, i*IMG_DIM + j)++;
+                    }
+                }
+            }
+
+            classindex++;
+            totalindex++;
+        }
+
+        //Add total nr in prior probability
+        priors[c] = (double)classindex;
+
+        //Divide likelihood sum with total number of class elements
+        for (d = 0; d < nrDimBayes; d++) {
+            if (likelihood.at<double>(c, d) == 0) {
+                likelihood.at<double>(c, d) = 1e-5;
+            }
+            else {
+                likelihood.at<double>(c, d) /= (double)classindex;
+            }
+            //printf("%d %lf\n", c, likelihood.at<double>(c, d));
+        }
+    }
+
+    //Divide priors with total number of elements
+    for (c = 0; c < NR_OF_CLASSES_BAYES; c++) {
+        priors[c] /= (double)totalindex;
+        //printf("%lf\n", priors[c]);
+    }
+
+    totalindex = 0;
+    int classified = 0;
+    Mat confusion_mat(NR_OF_CLASSES_BAYES, NR_OF_CLASSES_BAYES, CV_32SC1, Scalar(0));
+
+    //Classification algorithm
+    for (c = 0; c < NR_OF_CLASSES_BAYES; c++) {
+        classindex = 0;
+        while (1) {
+            sprintf(fname, "Files/images_Bayes/test/%d/%06d.png", c, classindex);
+            Mat img = imread(fname, CV_LOAD_IMAGE_GRAYSCALE);
+            if (img.cols == 0) break;
+
+            //Binarization (thresholding)
+            for (i = 0; i < IMG_DIM; i++) {
+                for (j = 0; j < IMG_DIM; j++) {
+                    if (img.at<uchar>(i, j) < THRESHOLD) {
+                        img.at<uchar>(i, j) = 0;
+                    }
+                    else {
+                        img.at<uchar>(i, j) = 255;
+                    }
+                }
+            }
+
+            classified = classifyBayes(img, priors, likelihood);
+
+            //printf("Predicted class: %d\nActual class: %d\n\n", classified, c);
+            confusion_mat.at<int>(c, classified)++;
+
+            classindex++;
+            totalindex++;
+        }
+    }
+
+    for (i = 0; i < NR_OF_CLASSES_BAYES; i++) {
+        for (int j = 0; j < NR_OF_CLASSES_BAYES; j++) {
+            printf("%5d ", confusion_mat.at<int>(i, j));
+        }
+        printf("\n");
+    }
+
+    int sum_main_diag = 0;
+    int sum_all_elem = 0;
+    for (i = 0; i < NR_OF_CLASSES_BAYES; i++) {
+        for (int j = 0; j < NR_OF_CLASSES_BAYES; j++) {
+            sum_all_elem += confusion_mat.at<int>(i, j);
+            if (i == j) {
+                sum_main_diag += confusion_mat.at<int>(i, j);
+            }
+        }
+    }
+
+    double ACC = (double)sum_main_diag / (double)sum_all_elem;
+    printf("ACC: %lf\n", ACC);
+
+    getchar();
+    getchar();
 }
 
 int main()
@@ -1674,6 +1837,7 @@ int main()
 		printf(" 19 - Principal Component Analysis 2d\n");
 		printf(" 20 - Principal Component Analysis 3d\n");
 		printf(" 21 - K-Nearest Neighbor\n");
+		printf(" 22 - Naive Bayesian Classifier\n");
 		printf(" 0 - Exit\n\n");
 		printf("Option: ");
 		scanf("%d", &op);
@@ -1743,6 +1907,9 @@ int main()
 		case 21:
 			knnClassifier();
 			break;
+        case 22:
+            naiveBayes();
+            break;
 		}
 	} while (op != 0);
 	return 0;
