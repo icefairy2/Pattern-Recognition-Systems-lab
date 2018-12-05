@@ -1808,6 +1808,85 @@ void naiveBayes() {
     getchar();
 }
 
+/******************LAB10******************/
+
+void perceptron() {
+    char fname[MAX_PATH];
+    while (openFileDlg(fname)) {
+        Mat img = imread(fname, CV_LOAD_IMAGE_COLOR);
+
+        Mat w(1, 3, CV_64FC1, Scalar(0.1));
+        Mat X(0, 3, CV_32SC1);
+        Mat Y(0, 1, CV_32SC1);
+
+        Vec3b white(255, 255, 255);
+        Vec3b red(0, 0, 255);
+        Vec3b blue(255, 0, 0);
+        
+        int i, j;
+        int n = 0;
+        for (i = 0; i < img.rows; i++) {
+            for (j = 0; j < img.cols; j++) {
+                if (img.at<Vec3b>(i, j) != white) {
+                    Mat Xn(1, 3, CV_32SC1);
+                    Mat Yn(1, 1, CV_32SC1);
+
+                    Xn.at<int>(0, 0) = 1;
+                    Xn.at<int>(0, 1) = j;
+                    Xn.at<int>(0, 2) = i;
+
+                    if (img.at<Vec3b>(i, j) == red) {
+                        Yn.at<int>(0, 0) = -1;
+                    }
+                    else {
+                        Yn.at<int>(0, 0) = 1;
+                    }
+
+                    X.push_back(Xn);
+                    Y.push_back(Yn);
+
+                    n++;
+                }
+            }
+        }
+
+        double teta = 1e-4;
+        double E_limit = 1e-5;
+        double max_iter = 1e5;
+        double E;
+        double z;
+
+        for (int iter = 0; iter < max_iter; iter++) {
+            E = 0;
+            for (i = 0; i < n; i++) {
+                z = 0;
+                for (j = 0; j < 3; j++) {
+                    z += w.at<double>(0, j)*X.at<int>(i, j);
+                }
+                if (z*Y.at<int>(i, 0) <= 0) {
+                    for (j = 0; j < 3; j++) {
+                        w.at<double>(0, j) += teta * X.at<int>(i, j)*Y.at<int>(i, 0);
+                    }
+                    E++;
+                }
+            }
+
+            E /= n;
+            if (E < E_limit) {
+                break;
+            }
+        }
+
+        Point A(0, int(-w.at<double>(0, 0) / w.at<double>(0, 2)));
+        Point B(img.cols, int((-w.at<double>(0, 0) - w.at<double>(0, 1)*img.cols) / w.at<double>(0, 2)));
+
+        line(img, A, B, Scalar(0, 0, 0));
+
+        imshow("Image", img);
+        waitKey();
+    }
+}
+
 int main()
 {
 	int op;
@@ -1837,7 +1916,8 @@ int main()
 		printf(" 19 - Principal Component Analysis 2d\n");
 		printf(" 20 - Principal Component Analysis 3d\n");
 		printf(" 21 - K-Nearest Neighbor\n");
-		printf(" 22 - Naive Bayesian Classifier\n");
+        printf(" 22 - Naive Bayesian Classifier\n");
+        printf(" 23 - Perceptron algorithm\n");
 		printf(" 0 - Exit\n\n");
 		printf("Option: ");
 		scanf("%d", &op);
@@ -1909,6 +1989,9 @@ int main()
 			break;
         case 22:
             naiveBayes();
+            break;
+        case 23:
+            perceptron();
             break;
 		}
 	} while (op != 0);
