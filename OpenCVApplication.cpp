@@ -1887,6 +1887,198 @@ void perceptron() {
     }
 }
 
+/******************LAB11******************/
+
+#define MAXT 6000
+
+struct weaklearner{
+    int feature_i;
+    int threshold;
+    int class_label;
+    double error;
+    int classify(Mat X){
+        if (X.at<int>(feature_i)<threshold)
+            return class_label;
+        else
+            return -class_label;
+    }
+};
+
+struct classifier{
+    int T;
+    double alphas[MAXT];
+    weaklearner hs[MAXT];
+    int classify(Mat X){
+        double sum = 0;
+        for (int i = 0; i < T; i++) {
+            sum += alphas[i] * hs[i].classify(X);
+        }
+        if (sum < 0) {
+            return -1;
+        }
+        return 1;
+    }
+};
+
+//Decision Stump
+weaklearner findWeakLearner(Mat X, Mat Y, Mat W, int width, int height) {
+    weaklearner best_h;
+    best_h.error = FLT_MAX;
+
+    int i, j, thr, cls_lbl;
+    double error;
+    int z;
+    int limit;
+
+    //for every feature
+    for (j = 0; j < X.cols; j++) {
+        //for the range of the feature
+        limit = (j == 0) ? width : height;
+        for (thr = 0; thr < limit; thr++) {
+            //for all the class labels
+            for (cls_lbl = -1; cls_lbl <= 1; cls_lbl += 2) {
+                error = 0;
+
+                for (i = 0; i < X.rows; i++) {
+                    //classify point according to current classifier
+                    if (X.at<int>(i, j) < thr) {
+                        z = cls_lbl;
+                    }
+                    else {
+                        z = -cls_lbl;
+                    }
+
+                    //see if classification was incorrect
+                    if (z*Y.at<int>(i) < 0) {
+                        error += W.at<double>(i);
+                    }
+                }
+
+                //save learner if it was better than previous best
+                if (error < best_h.error) {
+                    best_h.feature_i = j;
+                    best_h.threshold = thr;
+                    best_h.class_label = cls_lbl;
+                    best_h.error = error;
+                }
+            }
+        }
+    }
+
+    return best_h;
+}
+
+void drawBoundary(Mat img, classifier clf) {
+    Vec3b white(255, 255, 255);
+    Vec3b cyan(0, 255, 255);
+    Vec3b yellow(255, 255, 0);
+
+    int i, j;
+    int classification;
+
+    for (i = 0; i < img.rows; i++) {
+        for (j = 0; j < img.cols; j++) {
+            if (img.at<Vec3b>(i, j) == white) {
+                Mat Xn(1, 2, CV_32SC1);
+                Xn.at<int>(0) = j;
+                Xn.at<int>(1) = i;
+                classification = clf.classify(Xn);
+                if (classification < 0) {
+                    img.at<Vec3b>(i, j) = yellow;
+                }
+                else
+                {
+                    img.at<Vec3b>(i, j) = cyan;
+                }
+            }
+        }
+    }
+}
+
+void adaboost() {
+    char fname[MAX_PATH];
+    while (openFileDlg(fname)) {
+        Mat img = imread(fname, CV_LOAD_IMAGE_COLOR);
+
+        Vec3b white(255, 255, 255);
+        Vec3b red(0, 0, 255);
+        Vec3b blue(255, 0, 0);
+
+        Mat X(0, 2, CV_32SC1);
+        Mat Y(0, 1, CV_32SC1);
+        Mat W(0, 1, CV_64FC1);
+
+        int i, j, t;
+        int n = 0;
+        for (i = 0; i < img.rows; i++) {
+            for (j = 0; j < img.cols; j++) {
+                if (img.at<Vec3b>(i, j) != white) {
+                    Mat Xn(1, 2, CV_32SC1);
+                    Mat Yn(1, 1, CV_32SC1);
+                    Mat Wn(1, 1, CV_64FC1);
+
+                    Xn.at<int>(0) = j;
+                    Xn.at<int>(1) = i;
+
+                    if (img.at<Vec3b>(i, j) == red) {
+                        Yn.at<int>(0) = -1;
+                    }
+                    else {
+                        Yn.at<int>(0) = 1;
+                    }
+
+                    Wn.at<double>(0) = 1.0;
+
+                    X.push_back(Xn);
+                    Y.push_back(Yn);
+                    W.push_back(Wn);
+
+                    n++;
+                }
+            }
+        }
+
+        for (i = 0; i < n; i++) {
+            W.at<double>(i) /= n;
+        }
+
+        classifier adaboost;
+        printf("Please input T:\n");
+        scanf("%d", &adaboost.T);
+
+        double error, sum;
+
+        for (t = 0; t < adaboost.T; t++) {
+            //get the most accurate weak learner at this step
+            adaboost.hs[t] = findWeakLearner(X, Y, W, img.cols, img.rows);
+            printf("Found learner %d\n", t);
+
+            //calculate alpha
+            error = adaboost.hs[t].error;
+            adaboost.alphas[t] = 0.5 * log((1 - error) / error);
+
+            //update weights
+            sum = 0;
+            for (i = 0; i < n; i++) {
+                W.at<double>(i) *= exp((double)-adaboost.alphas[t] * 
+                                            Y.at<int>(i)*
+                                            adaboost.hs[t].classify(X.row(i)));
+                sum += W.at<double>(i);
+            }
+
+            //normalize weights
+            for (i = 0; i < n; i++) {
+                W.at<double>(i) /= sum;
+            }
+        }
+
+        drawBoundary(img, adaboost);
+
+        imshow("Image", img);
+        waitKey();
+    }
+}
+
 int main()
 {
 	int op;
@@ -1918,6 +2110,7 @@ int main()
 		printf(" 21 - K-Nearest Neighbor\n");
         printf(" 22 - Naive Bayesian Classifier\n");
         printf(" 23 - Perceptron algorithm\n");
+        printf(" 24 - The Adaboost method\n");
 		printf(" 0 - Exit\n\n");
 		printf("Option: ");
 		scanf("%d", &op);
@@ -1992,6 +2185,9 @@ int main()
             break;
         case 23:
             perceptron();
+            break;
+        case 24:
+            adaboost();
             break;
 		}
 	} while (op != 0);
